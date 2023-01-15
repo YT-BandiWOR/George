@@ -129,10 +129,12 @@
   <ItemGroup>
     <ClCompile Include="Lexer.cpp" />
     <ClCompile Include="Main.cpp" />
+    <ClCompile Include="Tools.cpp" />
     <ClCompile Include="VirtualTree.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Lexer.h" />
+    <ClInclude Include="Tools.h" />
     <ClInclude Include="VirtualTree.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

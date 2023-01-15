@@ -2,6 +2,7 @@
 #include <fstream>
 
 #include "Lexer.h"
+#include "Tools.h"
 
 using namespace std;
 
@@ -35,14 +36,18 @@ int main(int argc, const char* argv[]) {
 		data[i] = wstr[i];
 	}
 	data[wstr.size()] = '\0';
-
 	auto virtual_tree = Lexer::Tokenize(data, wstr.size());
+
+	delete[] data;
+
 	for (size_t i = 0; i < virtual_tree->size(); i++)
 	{
 		auto el = virtual_tree->at(i);
-		wcout << el->type << L"\t" << el->data << endl;
+		wcout << token_type_to_wcharptr(el->type) << L"\t\t\t\t\t" << el->data << endl;
 
 	}
+
+	delete virtual_tree;
 
 	return 0;
 }

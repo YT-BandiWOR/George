@@ -36,19 +36,6 @@ public:
 	size_t lineno;
 	wchar_t* data;
 	size_t data_size;
-	Token* next;
 	Token(TokenType type, size_t lineno, const wchar_t* data, size_t data_size);
-};
-
-class VirtualTree
-{
-private:
-	Token* head = nullptr;
-	size_t _size = 0;
-public:
-	void push_back(TokenType type, size_t lineno, const wchar_t* data, size_t data_size);
-
-	Token* at(size_t index);
-
-	size_t size() { return _size; }
+	~Token();
 };

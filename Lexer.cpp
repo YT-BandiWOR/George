@@ -2,11 +2,12 @@
 
 
 
-VirtualTree* Lexer::Tokenize(wchar_t* str, size_t length) {
-	auto tree = new VirtualTree();
+vector<Token*>* Lexer::Tokenize(wchar_t* str, size_t length) {
+	auto tree = new vector<Token*>();
+
 	size_t lineno = 0;
 	LexerState state = ST_NONE;
-	IntNumberType spec_integer_type;
+	IntNumberType spec_integer_type = DEC;
 	wstring buf;
 	buf.reserve(64);
 
@@ -17,18 +18,55 @@ VirtualTree* Lexer::Tokenize(wchar_t* str, size_t length) {
 		wchar_t c = str[i];
 		if (c == L'\n') lineno++;
 
+		if (c == L'(') {
+			AppendToken(tree, lineno, buf, state, spec_integer_type);
+			AppendToken(tree, lineno, OP_ROUND_BRACKET_OPENED);
+			continue;
+		}
+		else if (c == L')') {
+			AppendToken(tree, lineno, buf, state, spec_integer_type);
+			AppendToken(tree, lineno, OP_ROUND_BRACKET_CLOSED);
+			continue;
+		}
+		else if (c == L'[') {
+			AppendToken(tree, lineno, buf, state, spec_integer_type);
+			AppendToken(tree, lineno, OP_SQUARE_BRACKET_OPENED);
+			continue;
+		}
+		else if (c == L']') {
+			AppendToken(tree, lineno, buf, state, spec_integer_type);
+			AppendToken(tree, lineno, OP_SQUARE_BRACKET_CLOSED);
+			continue;
+		}
+		else if (c == L'{') {
+			AppendToken(tree, lineno, buf, state, spec_integer_type);
+			AppendToken(tree, lineno, OP_CURLY_BRACKET_OPENED);
+			continue;
+		}
+		else if (c == L'}') {
+			AppendToken(tree, lineno, buf, state, spec_integer_type);
+			AppendToken(tree, lineno, OP_CURLY_BRACKET_CLOSED);
+			continue;
+		}
+
 		switch (state)
 		{
 		case ST_NONE:  //   
 		{
 			switch (c)
 			{
-			case L' ': break;
-			case L'#': state = ST_COMMENT; break;
-			case L'\'': state = ST_TEXT; break;
-			case L'\"': state = ST_DOUBLETEXT; break;
-			case L'0': state = ST_SPECINTEGER; break;
+			case L' ': continue;
+			case L'#': state = ST_COMMENT; continue;
+			case L'\'': state = ST_TEXT; continue;
+			case L'\"': state = ST_DOUBLETEXT; continue;
+			case L'0': state = ST_SPECINTEGER; continue;
 			}
+
+			if (c >= L'0' && c <= L'9') {
+				state = ST_INTEGER;
+				buf += c;
+			}
+
 			continue;
 		}
 		break;
@@ -67,9 +105,21 @@ VirtualTree* Lexer::Tokenize(wchar_t* str, size_t length) {
 		case ST_SPECINTEGER:
 			switch (c)
 			{
-			case L'x': spec_integer_type = HEX; break;
-			case L'b': spec_integer_type = BIN; break;
-			case L'o': spec_integer_type = OCT; break;
+			case L'\n':
+				AppendToken(tree, lineno, buf, state, spec_integer_type);
+				spec_integer_type = DEC;
+				break;
+			case L'0': {
+				spec_integer_type = DEC;
+				state = ST_INTEGER;
+			}
+					 continue;
+			case L'X':
+			case L'x': spec_integer_type = HEX; continue;
+			case L'B':
+			case L'b': spec_integer_type = BIN; continue;
+			case L'O':
+			case L'o': spec_integer_type = OCT; continue;
 			default: break; // Error
 			}
 
@@ -84,27 +134,48 @@ VirtualTree* Lexer::Tokenize(wchar_t* str, size_t length) {
 			else {
 				// Error
 			}
-			break;
+		break;
+		
+		case ST_INTEGER:
+			switch (c)
+			{
+			case L'\n':
+				AppendToken(tree, lineno, buf, state);
+				break;
+			case L'.':
+				state = ST_FLOAT;
+				continue;
+			default: break;
+			}
+
+			if (c >= L'0' && c <= L'9') {
+				buf += c;
+				continue;
+			}
+			else {
+				// Error
+			}
 		}
 	}
 
 	if (!buf.empty() && state != ST_NONE) {
-		AppendToken(tree, lineno, buf, state);
+		AppendToken(tree, lineno, buf, state, spec_integer_type);
 	}
 
 	return tree;
 }
 
-void Lexer::AppendToken(VirtualTree* tree, size_t lineno, wstring& buffer, LexerState& state, IntNumberType number_type) {
+void Lexer::AppendToken(vector<Token*>* tree, size_t lineno, wstring& buffer, LexerState& state, IntNumberType number_type) {
 	switch (state)
 	{
 	case ST_COMMENT:
-		tree->push_back(OP_COMMENT, lineno, buffer.c_str(), buffer.size());
+		tree->push_back(new Token(OP_COMMENT, lineno, buffer.c_str(), buffer.size()));
 		break;
 	case ST_DOUBLETEXT:
 	case ST_TEXT:
-		tree->push_back(TEXT, lineno, buffer.c_str(), buffer.size());
+		tree->push_back(new Token(TEXT, lineno, buffer.c_str(), buffer.size()));
 		break;
+	case ST_INTEGER:
 	case ST_SPECINTEGER:
 		wchar_t* num_str = nullptr;
 		if (number_type == HEX)
@@ -113,7 +184,10 @@ void Lexer::AppendToken(VirtualTree* tree, size_t lineno, wstring& buffer, Lexer
 			num_str = convert_num2dec(buffer, 2);
 		else if (number_type == OCT)
 			num_str = convert_num2dec(buffer, 8);
-		tree->push_back(INTEGER, lineno, num_str, buffer.size());
+		else
+			num_str = convert_num2dec(buffer, 10);
+
+		tree->push_back(new Token(INTEGER, lineno, num_str, wcslen(num_str)));
 		delete[] num_str;
 		break;
 	}
@@ -123,12 +197,8 @@ void Lexer::AppendToken(VirtualTree* tree, size_t lineno, wstring& buffer, Lexer
 
 
 
-void Lexer::AppendToken(VirtualTree* tree, size_t lineno, LexerState& state) {
-	switch (state)
-	{
-	default:
-		break;
-	}
+void Lexer::AppendToken(vector<Token*>* tree, size_t lineno, TokenType type) {
+	tree->push_back(new Token(type, lineno, nullptr, 0));
 }
 
 wchar_t* Lexer::convert_num2dec(wstring& buffer, size_t foundation) {
@@ -162,7 +232,7 @@ wchar_t* Lexer::convert_num2wchar(size_t num) {
 		case 7: n[index] = L'7'; break;
 		case 8: n[index] = L'8'; break;
 		case 9: n[index] = L'9'; break;
-		default: n[index]; break;
+		default: n[index] = L'0'; break;
 		}
 		--index;
 	}
