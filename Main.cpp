@@ -1,7 +1,7 @@
 #include <iostream>
 #include <fstream>
 
-#include "NewLexer.h"
+#include "Lexer.h"
 
 using namespace std;
 
@@ -16,10 +16,20 @@ std::string ReadFromFile(const char filename[]) {
 }
 
 
-int main() {
-	string str = ReadFromFile("Main.gr");
+int main(int argc, const char* argv[]) {
+	char* filename;
+
+	if (argc > 1) {
+		filename = (char*)argv[1];
+	}
+	else {
+		filename = (char*)"Main.gr";
+	}
+
+
+	string str = ReadFromFile(filename);
 	std::wstring wstr(str.begin(), str.end());
-	wchar_t* data = new wchar_t[wstr.size()+1];
+	wchar_t* data = new wchar_t[wstr.size() + 1];
 	for (size_t i = 0; i < wstr.size(); i++)
 	{
 		data[i] = wstr[i];
