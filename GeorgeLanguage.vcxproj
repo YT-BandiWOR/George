@@ -133,7 +133,6 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Lexer.h" />
-    <ClInclude Include="NewLexer.h" />
     <ClInclude Include="VirtualTree.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

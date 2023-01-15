@@ -1,150 +1,188 @@
-/*
 #pragma once
 
-#include <iostream>
 #include "VirtualTree.h"
+#include <string>
 
-using namespace std;
+using std::wstring;
 
 class Lexer
 {
-private:
-	enum SpecNumberType
-	{
-		HEX, OCT, BIN
-	};
 public:
 	Lexer() = delete;
 	Lexer(Lexer&) = delete;
 
-	static VirtualTree* Tokenize(wchar_t* str) {
+	static VirtualTree* Tokenize(wchar_t* str, size_t length) {
 		auto tree = new VirtualTree();
-
-		size_t length = wcslen(str);
 		size_t lineno = 0;
+		LexerState state = ST_NONE;
+		IntNumberType spec_integer_type;
+		wstring buf;
+		buf.reserve(64);
 
-		bool quote = false;
-		bool backSlash = false;
+		bool isBackSlash = false;
 
-		bool isSpecNumber = false;
-		SpecNumberType num_type;
-		bool isNumber = false;
-
-		bool isLiteral = false;
-
-		wstring buffer;
-		buffer.reserve(64);
-
-		for (size_t i = 0; i < length; ++i)
+		for (size_t i = 0; i < length; i++)
 		{
-			wchar_t chr = str[i];
-			
-			if (chr == L'\n') {
-				++lineno;
-				goto end;
+			wchar_t c = str[i];
+			if (c == L'\n') lineno++;
+
+			switch (state)
+			{
+			case ST_NONE:  //   
+			{
+				switch (c)
+				{
+				case L' ': break;
+				case L'#': state = ST_COMMENT; break;
+				case L'\'': state = ST_TEXT; break;
+				case L'\"': state = ST_DOUBLETEXT; break;
+				case L'0': state = ST_SPECINTEGER; break;
+				}
+				continue;
 			}
-			if (chr == L'"' && !quote) {
-				quote = true;
-				goto end;
+			break;
+			case ST_COMMENT:   // #...
+			{
+				if (c == L'\n') {
+					AppendToken(tree, lineno - 1, buf, state);
+					break;
+				}
+				buf += c;
 			}
-			if (quote) {
-				if (backSlash) {
-					backSlash = false;
-					switch (chr) {
-					case L'\\': buffer += L'\\';
-					case L'"': buffer += L'"';
-					case L'\'': buffer += L'\'';
-					case L'n': buffer += L'\n';
-					}
-					goto end;
+			break;
+			case ST_TEXT:       // '...'
+			case ST_DOUBLETEXT: // "..."
+				if (isBackSlash) {
+					isBackSlash = false;
+					if (c == L'\\') buf += c;
+					else if (c == L'n') buf += c;
+					else if (c == L'"') buf += c;
+					else if (c == L'\'') buf += c;
 				}
 				else {
-					if (chr == L'\\') {
-						backSlash = true;
-						goto end;
-					}
-					else if (chr == L'"') {
-						quote = false;
-						tree->push_back(STRING, buffer.c_str(), buffer.size());
-						buffer.clear();
-						goto end;
+					if (c == L'\\') {
+						isBackSlash = true;
 					}
 					else {
-						buffer += chr;
-						goto end;
-					}
-				}
-			}
-
-			if (chr >= L'0' && chr <= L'9' && !isLiteral) {
-				if (chr == L'0' && !isNumber) {
-					isNumber = true;
-					isSpecNumber = true;
-					goto end;
-				}
-				else {
-					isNumber = true;
-					buffer += chr;
-					goto end;
-				}
-			}
-
-			if (((chr >= L'a' && chr <= L'f') || (chr >= L'A' && chr <= 'F')) && isSpecNumber && (num_type == HEX)) {
-				buffer += chr;
-				goto end;
-			}
-
-			if (isSpecNumber && chr == L'x') {
-				num_type = HEX;
-				goto end;
-			}
-			else if (isSpecNumber && chr == L'o') {
-				num_type = OCT;
-				goto end;
-			}
-			else if (isSpecNumber && chr == L'b') {
-				num_type = BIN;
-				goto end;
-			}
-
-			end:
-			if ((chr == L' ' && !quote) || (i + 1 == length)) {
-				if (isNumber) {
-					isNumber = false;
-					if (isSpecNumber) {
-						isSpecNumber = false;
-						if (num_type == HEX) {
-							auto num = convert_hex2dec(buffer);
-							tree->push_back(NUMBER, num.c_str(), num.size());
+						if ((state == ST_DOUBLETEXT && c == L'"') || (state == ST_TEXT && c == L'\'')) {
+							AppendToken(tree, lineno, buf, state);
 						}
-						continue;
+						else {
+							buf += c;
+						}
 					}
-					else {
-
-						continue;
-					}
-					continue;
 				}
-				
-				buffer.clear();
+				break;
+			case ST_SPECINTEGER:
+				switch (c)
+				{
+				case L'x': spec_integer_type = HEX; break;
+				case L'b': spec_integer_type = BIN; break;
+				case L'o': spec_integer_type = OCT; break;
+				default: break; // Error
+				}
+
+				if (
+					((spec_integer_type == HEX) && ((c >= L'0' && c <= L'9') || (c >= L'a' && c <= L'f') || (c >= L'A' && c <= 'F'))) ||
+					((spec_integer_type == OCT) && (c >= '0' && c <= '7')) ||
+					((spec_integer_type == BIN) && (c == L'0' || c == L'1'))
+					) {
+					buf += c;
+					break;
+				}
+				else {
+					// Error
+				}
+				break;
 			}
+		}
+
+		if (!buf.empty() && state != ST_NONE) {
+			AppendToken(tree, lineno, buf, state);
 		}
 
 		return tree;
 	}
 
-	static wstring convert_hex2dec(wstring hex_num) {
-		size_t result = 0;
-		size_t power = 0;
-		size_t foundation = 16;
-		for (size_t i = hex_num.size() - 1; i >= 0; --i)
+	static void AppendToken(VirtualTree* tree, size_t lineno, wstring& buffer, LexerState& state, IntNumberType number_type = DEC) {
+		switch (state)
 		{
-			result += get_alphabet_number(hex_num[i]) * pow(foundation, power);
-			power++;
+		case ST_COMMENT:
+			tree->push_back(OP_COMMENT, lineno, buffer.c_str(), buffer.size());
+			break;
+		case ST_DOUBLETEXT:
+		case ST_TEXT:
+			tree->push_back(TEXT, lineno, buffer.c_str(), buffer.size());
+			break;
+		case ST_SPECINTEGER:
+			wchar_t* num_str = nullptr;
+			if (number_type == HEX)
+				num_str = convert_num2dec(buffer, 16);
+			else if (number_type == BIN)
+				num_str = convert_num2dec(buffer, 2);
+			else if (number_type == OCT)
+				num_str = convert_num2dec(buffer, 8);
+			tree->push_back(INTEGER, lineno, num_str, buffer.size());
+			delete[] num_str;
+			break;
 		}
-		wstring new_str;
-		new_str += result;
-		return new_str;
+		buffer.clear();
+		state = ST_NONE;
+	}
+
+	static void AppendToken(VirtualTree* tree, size_t lineno, LexerState& state) {
+		switch (state)
+		{
+		default:
+			break;
+		}
+	}
+
+	static wchar_t* convert_num2dec(wstring& buffer, size_t foundation) {
+		size_t result = 0;
+		size_t power = buffer.size() - 1;
+		for (size_t i = 0; i < buffer.size(); ++i)
+		{
+			result += get_alphabet_number(buffer[i]) * pow(foundation, power);
+			--power;
+		}
+		return convert_num2wchar(result);
+	}
+
+	static wchar_t* convert_num2wchar(size_t num) {
+		wchar_t* n = new wchar_t[get_num_size(num) + 1];
+		n[get_num_size(num)] = '\0';
+
+		size_t f = 0;
+		size_t index = get_num_size(num) - 1;
+		while (num) {
+			f = num % 10;
+			num /= 10;
+			switch (f)
+			{
+			case 1: n[index] = L'1'; break;
+			case 2: n[index] = L'2'; break;
+			case 3: n[index] = L'3'; break;
+			case 4: n[index] = L'4'; break;
+			case 5: n[index] = L'5'; break;
+			case 6: n[index] = L'6'; break;
+			case 7: n[index] = L'7'; break;
+			case 8: n[index] = L'8'; break;
+			case 9: n[index] = L'9'; break;
+			default: n[index]; break;
+			}
+			--index;
+		}
+		return n;
+	}
+
+	static size_t get_num_size(size_t num) {
+		size_t count = 0;
+		while (num) {
+			num /= 10;
+			count++;
+		}
+		return count;
 	}
 
 	static size_t get_alphabet_number(wchar_t chr) {
@@ -177,5 +215,3 @@ public:
 		}
 	}
 };
-
-*/
