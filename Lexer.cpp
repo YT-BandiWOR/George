@@ -18,35 +18,37 @@ vector<Token*>* Lexer::Tokenize(wchar_t* str, size_t length) {
 		wchar_t c = str[i];
 		if (c == L'\n') lineno++;
 
-		if (c == L'(') {
-			AppendToken(tree, lineno, buf, state, spec_integer_type);
-			AppendToken(tree, lineno, OP_ROUND_BRACKET_OPENED);
-			continue;
-		}
-		else if (c == L')') {
-			AppendToken(tree, lineno, buf, state, spec_integer_type);
-			AppendToken(tree, lineno, OP_ROUND_BRACKET_CLOSED);
-			continue;
-		}
-		else if (c == L'[') {
-			AppendToken(tree, lineno, buf, state, spec_integer_type);
-			AppendToken(tree, lineno, OP_SQUARE_BRACKET_OPENED);
-			continue;
-		}
-		else if (c == L']') {
-			AppendToken(tree, lineno, buf, state, spec_integer_type);
-			AppendToken(tree, lineno, OP_SQUARE_BRACKET_CLOSED);
-			continue;
-		}
-		else if (c == L'{') {
-			AppendToken(tree, lineno, buf, state, spec_integer_type);
-			AppendToken(tree, lineno, OP_CURLY_BRACKET_OPENED);
-			continue;
-		}
-		else if (c == L'}') {
-			AppendToken(tree, lineno, buf, state, spec_integer_type);
-			AppendToken(tree, lineno, OP_CURLY_BRACKET_CLOSED);
-			continue;
+		if (state != ST_TEXT && state != ST_DOUBLETEXT && state != ST_COMMENT) {
+			switch (c)
+			{
+			case L' ':
+				AppendToken(tree, lineno, buf, state, spec_integer_type);
+				continue;
+			case L'(':
+				AppendToken(tree, lineno, buf, state, spec_integer_type);
+				AppendToken(tree, lineno, OP_ROUND_BRACKET_OPENED);
+				continue;
+			case L')':
+				AppendToken(tree, lineno, buf, state, spec_integer_type);
+				AppendToken(tree, lineno, OP_ROUND_BRACKET_CLOSED);
+				continue;
+			case L'[':
+				AppendToken(tree, lineno, buf, state, spec_integer_type);
+				AppendToken(tree, lineno, OP_SQUARE_BRACKET_OPENED);
+				continue;
+			case L']':
+				AppendToken(tree, lineno, buf, state, spec_integer_type);
+				AppendToken(tree, lineno, OP_SQUARE_BRACKET_CLOSED);
+				continue;
+			case L'{':
+				AppendToken(tree, lineno, buf, state, spec_integer_type);
+				AppendToken(tree, lineno, OP_CURLY_BRACKET_OPENED);
+				continue;
+			case L'}':
+				AppendToken(tree, lineno, buf, state, spec_integer_type);
+				AppendToken(tree, lineno, OP_CURLY_BRACKET_CLOSED);
+				continue;
+			}
 		}
 
 		switch (state)
@@ -55,6 +57,7 @@ vector<Token*>* Lexer::Tokenize(wchar_t* str, size_t length) {
 		{
 			switch (c)
 			{
+			case L'\n': continue;
 			case L' ': continue;
 			case L'#': state = ST_COMMENT; continue;
 			case L'\'': state = ST_TEXT; continue;
@@ -65,7 +68,10 @@ vector<Token*>* Lexer::Tokenize(wchar_t* str, size_t length) {
 			if (c >= L'0' && c <= L'9') {
 				state = ST_INTEGER;
 				buf += c;
+				continue;
 			}
+			buf += c;
+			state = ST_LITER;
 
 			continue;
 		}
@@ -103,17 +109,24 @@ vector<Token*>* Lexer::Tokenize(wchar_t* str, size_t length) {
 			}
 			break;
 		case ST_SPECINTEGER:
-			switch (c)
-			{
-			case L'\n':
+			if (spec_integer_type == DEC && c == L'.') {
+				state = ST_FLOAT;
+				buf += L"0.";
+				continue;
+			}
+			else if (c == L'\n') {
 				AppendToken(tree, lineno, buf, state, spec_integer_type);
 				spec_integer_type = DEC;
-				break;
-			case L'0': {
+				continue;
+			}
+			else if (c == L'0' && spec_integer_type == DEC) {
 				spec_integer_type = DEC;
 				state = ST_INTEGER;
+				continue;
 			}
-					 continue;
+			
+			switch (c)
+			{
 			case L'X':
 			case L'x': spec_integer_type = HEX; continue;
 			case L'B':
@@ -141,9 +154,10 @@ vector<Token*>* Lexer::Tokenize(wchar_t* str, size_t length) {
 			{
 			case L'\n':
 				AppendToken(tree, lineno, buf, state);
-				break;
+				continue;
 			case L'.':
 				state = ST_FLOAT;
+				buf += '.';
 				continue;
 			default: break;
 			}
@@ -155,6 +169,25 @@ vector<Token*>* Lexer::Tokenize(wchar_t* str, size_t length) {
 			else {
 				// Error
 			}
+		break;
+		case ST_FLOAT:
+			if (c >= L'0' && c <= L'9') {
+				buf += c;
+			}
+			else {
+				// Error
+			}
+			break;
+		case ST_LITER:
+		{
+			if (c == L'\n') {
+				AppendToken(tree, lineno, buf, state, spec_integer_type);
+			}
+			else {
+				buf += c;
+			}
+		}
+		break;
 		}
 	}
 
@@ -176,7 +209,7 @@ void Lexer::AppendToken(vector<Token*>* tree, size_t lineno, wstring& buffer, Le
 		tree->push_back(new Token(TEXT, lineno, buffer.c_str(), buffer.size()));
 		break;
 	case ST_INTEGER:
-	case ST_SPECINTEGER:
+	case ST_SPECINTEGER: {
 		wchar_t* num_str = nullptr;
 		if (number_type == HEX)
 			num_str = convert_num2dec(buffer, 16);
@@ -190,6 +223,12 @@ void Lexer::AppendToken(vector<Token*>* tree, size_t lineno, wstring& buffer, Le
 		tree->push_back(new Token(INTEGER, lineno, num_str, wcslen(num_str)));
 		delete[] num_str;
 		break;
+	}
+	case ST_FLOAT:
+		tree->push_back(new Token(FLOAT, lineno, buffer.c_str(), buffer.size()));
+		break;
+	case ST_LITER:
+		tree->push_back(new Token(LITER, lineno, buffer.c_str(), buffer.size()));
 	}
 	buffer.clear();
 	state = ST_NONE;
