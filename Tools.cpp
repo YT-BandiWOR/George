@@ -1,99 +1,61 @@
 #include "Tools.h"
 
-
-
-wchar_t* token_type_to_wcharptr(TokenType type) {
-	wchar_t* str;
-
+const wchar_t* operator_to_wtext(TokenType type)
+{
 	switch (type)
 	{
-	case LITER:
-		str = (wchar_t*)L"LITER";
-		break;
-	case TEXT:
-		str = (wchar_t*)L"TEXT";
-		break;
-	case INTEGER:
-		str = (wchar_t*)L"INTEGER";
-		break;
-	case FLOAT:
-		str = (wchar_t*)L"FLOAT";
-		break;
-	case OP_DOT:
-		str = (wchar_t*)L"OP_DOT";
-		break;
-	case OP_COMMA:
-		str = (wchar_t*)L"OP_COMMA";
-		break;
-	case OP_ROUND_BRACKET_OPENED:
-		str = (wchar_t*)L"OP_ROUND_BRACKET_OPENED";
-		break;
-	case OP_ROUND_BRACKET_CLOSED:
-		str = (wchar_t*)L"OP_ROUND_BRACKET_CLOSED";
-		break;
-	case OP_SQUARE_BRACKET_OPENED:
-		str = (wchar_t*)L"OP_SQUARE_BRACKET_OPENED";
-		break;
-	case OP_SQUARE_BRACKET_CLOSED:
-		str = (wchar_t*)L"OP_SQUARE_BRACKET_CLOSED";
-		break;
-	case OP_CURLY_BRACKET_OPENED:
-		str = (wchar_t*)L"OP_CURLY_BRACKET_OPENED";
-		break;
-	case OP_CURLY_BRACKET_CLOSED:
-		str = (wchar_t*)L"OP_CURLY_BRACKET_CLOSED";
-		break;
-	case OP_COMMENT:
-		str = (wchar_t*)L"OP_COMMENT";
-		break;
-	case OP_ADD:
-		str = (wchar_t*)L"OP_ADD";
-		break;
-	case OP_SUB:
-		str = (wchar_t*)L"OP_SUB";
-		break;
-	case OP_MUL:
-		str = (wchar_t*)L"OP_MUL";
-		break;
-	case OP_DIV:
-		str = (wchar_t*)L"OP_DIV";
-		break;
-	case OP_MOD:
-		str = (wchar_t*)L"OP_MOD";
-		break;
-	case OP_POW:
-		str = (wchar_t*)L"OP_POW";
-		break;
-	case OP_EQ:
-		str = (wchar_t*)L"OP_EQ";
-		break;
-	case OP_ASSIGN:
-		str = (wchar_t*)L"OP_ASSIGN";
-		break;
-	case OP_LT:
-		str = (wchar_t*)L"OP_LT";
-		break;
-	case OP_GT:
-		str = (wchar_t*)L"OP_GT";
-		break;
-	case OP_LTE:
-		str = (wchar_t*)L"OP_LTE";
-		break;
-	case OP_GTE:
-		str = (wchar_t*)L"OP_GTE";
-		break;
-	case OP_COLON:
-		str = (wchar_t*)L"OP_COLON";
-		break;
-	case OP_SEMICOLON:
-		str = (wchar_t*)L"OP_SEMICOLON";
-		break;
-	case NEW_LINE:
-		str = (wchar_t*)L"NEW_LINE";
-		break;
-	default:
-		str = (wchar_t*)L"UNKNOWN";
-		break;
+	case TokenType::NONE: return L"NONE";
+	case TokenType::LITERAL: return L"LITERAL";
+	case TokenType::TEXT: return L"TEXT";
+	case TokenType::COMMENT: return L"COMMENT";
+	case TokenType::INTEGER: return L"INTEGER";
+	case TokenType::FLOAT: return L"FLOAT";
+	case TokenType::DOT: return L"DOT";
+	case TokenType::COMMA: return L"COMMA";
+	case TokenType::COLON: return L"COLON";
+	case TokenType::SEMI: return L"SEMI";
+	case TokenType::LEFT_PARENTHESIS: return L"LEFT_PARENTHESIS";
+	case TokenType::RIGHT_PARENTHESIS: return L"RIGHT_PARENTHESIS";
+	case TokenType::LEFT_SQUARE_BRACKET: return L"LEFT_SQUARE_BRACKET";
+	case TokenType::RIGHT_SQUARE_BRACKET: return L"RIGHT_SQUARE_BRACKET";
+	case TokenType::LEFT_CURLY_BRACKET: return L"LEFT_CURLY_BRACKET";
+	case TokenType::RIGHT_CURLY_BRACKET: return L"RIGHT_CURLY_BRACKET";
+	case TokenType::PLUS: return L"PLUS";
+	case TokenType::MINUS: return L"MINUS";
+	case TokenType::STAR: return L"STAR";
+	case TokenType::SLASH: return L"SLASH";
+	case TokenType::DOUBLESTAR: return L"DOUBLESTAR";
+	case TokenType::DOUBLESLASH: return L"DOUBLESLASH";
+	case TokenType::VERTICAL: return L"VERTICAL";
+	case TokenType::AMPER: return L"AMPER";
+	case TokenType::CIRCUMFLEX: return L"CIRCUMFLEX";
+	case TokenType::PERCENT: return L"PERCENT";
+	case TokenType::DOLLAR: return L"DOLLAR";
+	case TokenType::AT: return L"AT";
+	case TokenType::LEFT_BITSHIFT: return L"LEFT_BITSHIFT";
+	case TokenType::RIGHT_BITSHIFT: return L"RIGHT_BITSHIFT";
+	case TokenType::PLUSEQ: return L"PLUSEQ";
+	case TokenType::MINUSEQ: return L"MINUSEQ";
+	case TokenType::STAREQ: return L"STAREQ";
+	case TokenType::SLASHEQ: return L"SLASHEQ";
+	case TokenType::DOUBLESTAREQ: return L"DOUBLESTAREQ";
+	case TokenType::DOUBLESLASHEQ: return L"DOUBLESLASHEQ";
+	case TokenType::VERTICALEQ: return L"VERTICALEQ";
+	case TokenType::AMPEREQ: return L"AMPEREQ";
+	case TokenType::CIRCUMFLEXEQ: return L"CIRCUMFLEXEQ";
+	case TokenType::PERCENTEQ: return L"PERCENTEQ";
+	case TokenType::DOLLAREQ: return L"DOLLAREQ";
+	case TokenType::ATEQ: return L"ATEQ";
+	case TokenType::LEFT_BITSHIFTEQ: return L"LEFT_BITSHIFTEQ";
+	case TokenType::RIGHT_BITSHIFTEQ: return L"RIGHT_BITSHIFTEQ";
+	case TokenType::EQUALS: return L"EQUALS";
+	case TokenType::EQEQUALS: return L"EQEQUALS";
+	case TokenType::LT: return L"LT";
+	case TokenType::GT: return L"GT";
+	case TokenType::LTE: return L"LTE";
+	case TokenType::GTE: return L"GTE";
+	case TokenType::NOTEQ: return L"NOTEW";
+	case TokenType::EXCLAMATION_MARK: return L"!";
+	default: return L"unknown";
 	}
-	return str;
 }

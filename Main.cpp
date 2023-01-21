@@ -36,18 +36,25 @@ int main(int argc, const char* argv[]) {
 		data[i] = wstr[i];
 	}
 	data[wstr.size()] = '\0';
-	auto virtual_tree = Lexer::Tokenize(data, wstr.size());
+
+	auto lexer = Tokenizer(data, wstr.size());
+	auto virtual_tree = lexer.tokenize();
 
 	delete[] data;
 
 	for (size_t i = 0; i < virtual_tree->size(); i++)
 	{
 		auto el = virtual_tree->at(i);
-		wcout << token_type_to_wcharptr(el->type) << L"\t\t\t\t\t" << el->data << endl;
-
+		if (el->type == TokenType::INTEGER) {
+			wcout << operator_to_wtext(el->type) << L" " << (long long)*el->data << endl;
+		}
+		else {
+			wcout << operator_to_wtext(el->type) << L" " << el->data << endl;
+		}
 	}
 
 	delete virtual_tree;
+
 
 	return 0;
 }

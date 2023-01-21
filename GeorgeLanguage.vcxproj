@@ -135,6 +135,7 @@
   <ItemGroup>
     <ClInclude Include="Lexer.h" />
     <ClInclude Include="Tools.h" />
+    <ClInclude Include="Types.h" />
     <ClInclude Include="VirtualTree.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

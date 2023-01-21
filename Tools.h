@@ -1,4 +1,5 @@
 #pragma once
-#include "VirtualTree.h"
+#include "Types.h"
 
-wchar_t* token_type_to_wcharptr(TokenType type);
+
+const wchar_t* operator_to_wtext(TokenType type);

@@ -1,9 +1,1 @@
-   00100 # DEC (100)
-   0x100 # HEX
-   0b100 # BIN
-   0o100 # OCT
-   0.100 # FLOAT
-   "String"
-   'String2'
-
-   ("string 3\"")[{literal}]
+-5

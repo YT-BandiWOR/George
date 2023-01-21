@@ -1,294 +1,372 @@
 #include "Lexer.h"
 
+using std::wstring;
 
+Tokenizer::Tokenizer(const wchar_t text[], size_t text_length)
+{
+	this->text_length = text_length;
+	this->text = new wchar_t[text_length + 1];
+	for (size_t i = 0; i < text_length; i++)
+		this->text[i] = text[i];
+	this->text[text_length] = L'\0';
+	this->status = TokenizerStatus();
+	status.c = L'\0';
+	status.string_type = StringType::NONE;
+	status.int_type = IntType::NONE;
+	status.token_type = TokenType::NONE;
+	status.string_backslash = StringBackSlash::FALSE;
+	status.long_operator = LongOperator::FALSE;
+	buffer = wstring();
+	buffer.reserve(64);
+	tree = nullptr;
 
-vector<Token*>* Lexer::Tokenize(wchar_t* str, size_t length) {
-	auto tree = new vector<Token*>();
+	std::cout << "sizeof Tokenizer: " << sizeof(Tokenizer) << std::endl;
+}
 
-	size_t lineno = 0;
-	LexerState state = ST_NONE;
-	IntNumberType spec_integer_type = DEC;
-	wstring buf;
-	buf.reserve(64);
-
-	bool isBackSlash = false;
-
-	for (size_t i = 0; i < length; i++)
+VirtualTree* Tokenizer::tokenize()
+{
+	tree = new VirtualTree();
+	status.symbol = 0;
+	status.line = 1;
+	for (size_t i = 0; i < text_length; ++i)
 	{
-		wchar_t c = str[i];
-		if (c == L'\n') lineno++;
+		this->status.c = this->text[i];
+		wchar_t c = this->status.c;
+		if (c == '\n') {
+			this->status.line += 1;
+			this->status.symbol = 1;
+		}
+		else this->status.symbol += 1;
 
-		if (state != ST_TEXT && state != ST_DOUBLETEXT && state != ST_COMMENT) {
-			switch (c)
-			{
-			case L' ':
-				AppendToken(tree, lineno, buf, state, spec_integer_type);
-				continue;
-			case L'(':
-				AppendToken(tree, lineno, buf, state, spec_integer_type);
-				AppendToken(tree, lineno, OP_ROUND_BRACKET_OPENED);
-				continue;
-			case L')':
-				AppendToken(tree, lineno, buf, state, spec_integer_type);
-				AppendToken(tree, lineno, OP_ROUND_BRACKET_CLOSED);
-				continue;
-			case L'[':
-				AppendToken(tree, lineno, buf, state, spec_integer_type);
-				AppendToken(tree, lineno, OP_SQUARE_BRACKET_OPENED);
-				continue;
-			case L']':
-				AppendToken(tree, lineno, buf, state, spec_integer_type);
-				AppendToken(tree, lineno, OP_SQUARE_BRACKET_CLOSED);
-				continue;
-			case L'{':
-				AppendToken(tree, lineno, buf, state, spec_integer_type);
-				AppendToken(tree, lineno, OP_CURLY_BRACKET_OPENED);
-				continue;
-			case L'}':
-				AppendToken(tree, lineno, buf, state, spec_integer_type);
-				AppendToken(tree, lineno, OP_CURLY_BRACKET_CLOSED);
-				continue;
-			}
+		if (this->status.token_type != TokenType::TEXT &&
+			this->status.token_type != TokenType::COMMENT &&
+			this->status.long_operator == LongOperator::FALSE) {
+			if (SwitchOperators()) continue;
 		}
 
-		switch (state)
+		switch (this->status.token_type)
 		{
-		case ST_NONE:  //   
-		{
-			switch (c)
-			{
-			case L'\n': continue;
-			case L' ': continue;
-			case L'#': state = ST_COMMENT; continue;
-			case L'\'': state = ST_TEXT; continue;
-			case L'\"': state = ST_DOUBLETEXT; continue;
-			case L'0': state = ST_SPECINTEGER; continue;
-			}
+		case TokenType::NONE:
+			if (c == L'0') {
+				this->status.token_type = TokenType::INTEGER;
+				this->status.int_type = IntType::SPEC;
 
-			if (c >= L'0' && c <= L'9') {
-				state = ST_INTEGER;
-				buf += c;
-				continue;
 			}
-			buf += c;
-			state = ST_LITER;
-
-			continue;
-		}
-		break;
-		case ST_COMMENT:   // #...
-		{
-			if (c == L'\n') {
-				AppendToken(tree, lineno - 1, buf, state);
-				break;
+			else if (c == L'"') {
+				this->status.token_type = TokenType::TEXT;
+				this->status.string_type = StringType::DOUBLE;
 			}
-			buf += c;
-		}
-		break;
-		case ST_TEXT:       // '...'
-		case ST_DOUBLETEXT: // "..."
-			if (isBackSlash) {
-				isBackSlash = false;
-				if (c == L'\\') buf += c;
-				else if (c == L'n') buf += c;
-				else if (c == L'"') buf += c;
-				else if (c == L'\'') buf += c;
+			else if (c == L'\'') {
+				this->status.token_type = TokenType::TEXT;
+				this->status.string_type = StringType::SINGLE;
+			}
+			else if (c >= L'0' && c <= L'9') {
+				this->status.token_type = TokenType::INTEGER;
+				this->status.int_type = IntType::DEC;
+				buffer += c;
 			}
 			else {
-				if (c == L'\\') {
-					isBackSlash = true;
+				this->status.token_type = TokenType::LITERAL;
+				this->buffer += c;
+			}
+			break;
+		case TokenType::TEXT:
+			if (c == L'\\' && status.string_backslash == StringBackSlash::FALSE) {
+				status.string_backslash = StringBackSlash::TRUE;
+			}
+			else if (c == L'\\' && status.string_backslash == StringBackSlash::TRUE) {
+				status.string_backslash = StringBackSlash::FALSE;
+				buffer += L'\\';
+			}
+			else if (status.string_backslash == StringBackSlash::TRUE) {
+				status.string_backslash = StringBackSlash::FALSE;
+				if (c == L'n') buffer += L'\n';
+				else buffer += c;
+			}
+			else if (status.string_backslash == StringBackSlash::FALSE) {
+				if (c == L'"' && status.string_type == StringType::DOUBLE) {
+					AppendToken();
+					status.string_type = StringType::NONE;
+				}
+				else if (c == L'\'' && status.string_type == StringType::SINGLE) {
+					AppendToken();
+					status.string_type = StringType::NONE;
 				}
 				else {
-					if ((state == ST_DOUBLETEXT && c == L'"') || (state == ST_TEXT && c == L'\'')) {
-						AppendToken(tree, lineno, buf, state);
-					}
-					else {
-						buf += c;
-					}
+					buffer += c;
 				}
 			}
 			break;
-		case ST_SPECINTEGER:
-			if (spec_integer_type == DEC && c == L'.') {
-				state = ST_FLOAT;
-				buf += L"0.";
-				continue;
-			}
-			else if (c == L'\n') {
-				AppendToken(tree, lineno, buf, state, spec_integer_type);
-				spec_integer_type = DEC;
-				continue;
-			}
-			else if (c == L'0' && spec_integer_type == DEC) {
-				spec_integer_type = DEC;
-				state = ST_INTEGER;
-				continue;
-			}
-			
-			switch (c)
+		case TokenType::LITERAL:
+			if (!SwitchOperators())
+				buffer += c;
+			break;
+		case TokenType::INTEGER:
+			if (c >= L'0' && c <= L'9')
 			{
-			case L'X':
-			case L'x': spec_integer_type = HEX; continue;
-			case L'B':
-			case L'b': spec_integer_type = BIN; continue;
-			case L'O':
-			case L'o': spec_integer_type = OCT; continue;
-			default: break; // Error
+				buffer += c;
 			}
+			break;
 
-			if (
-				((spec_integer_type == HEX) && ((c >= L'0' && c <= L'9') || (c >= L'a' && c <= L'f') || (c >= L'A' && c <= 'F'))) ||
-				((spec_integer_type == OCT) && (c >= '0' && c <= '7')) ||
-				((spec_integer_type == BIN) && (c == L'0' || c == L'1'))
-				) {
-				buf += c;
-				break;
+		case TokenType::PLUS:
+			if (c == L'=') {
+				AddLongOperator(TokenType::PLUSEQ);
 			}
-			else {
-				// Error
-			}
-		break;
-		
-		case ST_INTEGER:
-			switch (c)
-			{
-			case L'\n':
-				AppendToken(tree, lineno, buf, state);
-				continue;
-			case L'.':
-				state = ST_FLOAT;
-				buf += '.';
-				continue;
-			default: break;
-			}
-
-			if (c >= L'0' && c <= L'9') {
-				buf += c;
-				continue;
-			}
-			else {
-				// Error
-			}
-		break;
-		case ST_FLOAT:
-			if (c >= L'0' && c <= L'9') {
-				buf += c;
-			}
-			else {
+			else if (CheckSymbolsAfterOperator(c)) {
 				// Error
 			}
 			break;
-		case ST_LITER:
-		{
-			if (c == L'\n') {
-				AppendToken(tree, lineno, buf, state, spec_integer_type);
+		case TokenType::MINUS:
+			if (c == L'=') {
+				AddLongOperator(TokenType::MINUSEQ);
 			}
-			else {
-				buf += c;
+			else if (CheckSymbolsAfterOperator(c)) {
+				// Error
 			}
-		}
-		break;
+			break;
+		case TokenType::STAR:
+			if (c == L'=') {
+				AddLongOperator(TokenType::STAREQ);
+			}
+			else if (c == L'*') {
+				status.token_type = TokenType::DOUBLESTAR;
+			}
+			else if (CheckSymbolsAfterOperator(c)) {
+				// Error
+			}
+			break;
+		case TokenType::SLASH:
+			if (c == L'=') {
+				AddLongOperator(TokenType::SLASHEQ);
+			}
+			else if (c == L'/') {
+				status.token_type = TokenType::DOUBLESLASH;
+			}
+			else if (CheckSymbolsAfterOperator(c)) {
+				// Error
+			}
+			break;
 		}
 	}
-
-	if (!buf.empty() && state != ST_NONE) {
-		AppendToken(tree, lineno, buf, state, spec_integer_type);
-	}
+	AppendToken();
 
 	return tree;
 }
 
-void Lexer::AppendToken(vector<Token*>* tree, size_t lineno, wstring& buffer, LexerState& state, IntNumberType number_type) {
-	switch (state)
-	{
-	case ST_COMMENT:
-		tree->push_back(new Token(OP_COMMENT, lineno, buffer.c_str(), buffer.size()));
-		break;
-	case ST_DOUBLETEXT:
-	case ST_TEXT:
-		tree->push_back(new Token(TEXT, lineno, buffer.c_str(), buffer.size()));
-		break;
-	case ST_INTEGER:
-	case ST_SPECINTEGER: {
-		wchar_t* num_str = nullptr;
-		if (number_type == HEX)
-			num_str = convert_num2dec(buffer, 16);
-		else if (number_type == BIN)
-			num_str = convert_num2dec(buffer, 2);
-		else if (number_type == OCT)
-			num_str = convert_num2dec(buffer, 8);
-		else
-			num_str = convert_num2dec(buffer, 10);
-
-		tree->push_back(new Token(INTEGER, lineno, num_str, wcslen(num_str)));
-		delete[] num_str;
-		break;
+void Tokenizer::AppendToken()
+{
+	if (status.token_type == TokenType::NONE) return;
+	if (buffer.empty()) {
+		tree->push_back(new Token(status.line, status.symbol, status.token_type, nullptr, 0));
+		status.token_type = TokenType::NONE;
 	}
-	case ST_FLOAT:
-		tree->push_back(new Token(FLOAT, lineno, buffer.c_str(), buffer.size()));
-		break;
-	case ST_LITER:
-		tree->push_back(new Token(LITER, lineno, buffer.c_str(), buffer.size()));
-	}
-	buffer.clear();
-	state = ST_NONE;
-}
-
-
-
-void Lexer::AppendToken(vector<Token*>* tree, size_t lineno, TokenType type) {
-	tree->push_back(new Token(type, lineno, nullptr, 0));
-}
-
-wchar_t* Lexer::convert_num2dec(wstring& buffer, size_t foundation) {
-	size_t result = 0;
-	size_t power = buffer.size() - 1;
-	for (size_t i = 0; i < buffer.size(); ++i)
-	{
-		result += get_alphabet_number(buffer[i]) * pow(foundation, power);
-		--power;
-	}
-	return convert_num2wchar(result);
-}
-
-wchar_t* Lexer::convert_num2wchar(size_t num) {
-	wchar_t* n = new wchar_t[get_num_size(num) + 1];
-	n[get_num_size(num)] = '\0';
-
-	size_t f = 0;
-	size_t index = get_num_size(num) - 1;
-	while (num) {
-		f = num % 10;
-		num /= 10;
-		switch (f)
-		{
-		case 1: n[index] = L'1'; break;
-		case 2: n[index] = L'2'; break;
-		case 3: n[index] = L'3'; break;
-		case 4: n[index] = L'4'; break;
-		case 5: n[index] = L'5'; break;
-		case 6: n[index] = L'6'; break;
-		case 7: n[index] = L'7'; break;
-		case 8: n[index] = L'8'; break;
-		case 9: n[index] = L'9'; break;
-		default: n[index] = L'0'; break;
+	else {
+		if (status.token_type == TokenType::INTEGER) {
+			long long* result = (long long*) new char[sizeof(long long)];
+			*result = ConvertWstringToLong(buffer.c_str(), buffer.size(), status.int_type);
+			tree->push_back(new Token(status.line, status.symbol, status.token_type, (wchar_t*)result, sizeof(long long)/sizeof(wchar_t)));
 		}
-		--index;
+		else {
+			tree->push_back(new Token(status.line, status.symbol, status.token_type, buffer.c_str(), buffer.size()));
+		}
+
+		buffer.clear();
+		status.token_type = TokenType::NONE;
 	}
-	return n;
 }
 
-size_t Lexer::get_num_size(size_t num) {
-	size_t count = 0;
-	while (num) {
-		num /= 10;
-		count++;
-	}
-	return count;
+void Tokenizer::AddToken(TokenType type)
+{
+	AppendToken();
+	this->status.token_type = type;
+	AppendToken();
 }
 
-size_t Lexer::get_alphabet_number(wchar_t chr) {
-	switch (chr)
+void Tokenizer::SetLongOperator(TokenType type)
+{
+	this->status.long_operator = LongOperator::TRUE;
+	AppendToken();
+	this->status.token_type = type;
+}
+
+void Tokenizer::AddLongOperator(TokenType type)
+{
+	this->status.token_type = type;
+	this->status.long_operator = LongOperator::FALSE;
+	AppendToken();
+}
+
+bool Tokenizer::SwitchOperators()
+{
+	switch (status.c)
+	{
+	case L'\n':
+	case L' ':
+		AppendToken();
+		return true;
+	case L'(':
+		AddToken(TokenType::LEFT_PARENTHESIS);
+		return true;
+	case L')':
+		AddToken(TokenType::RIGHT_PARENTHESIS);
+		return true;
+	case L'[':
+		AddToken(TokenType::LEFT_SQUARE_BRACKET);
+		return true;
+	case L']':
+		AddToken(TokenType::RIGHT_SQUARE_BRACKET);
+		return true;
+	case L'{':
+		AddToken(TokenType::LEFT_CURLY_BRACKET);
+		return true;
+	case L'}':
+		AddToken(TokenType::RIGHT_CURLY_BRACKET);
+		return true;
+	case L'.':
+		AddToken(TokenType::DOT);
+		return true;
+	case L',':
+		AddToken(TokenType::COMMA);
+		return true;
+	case L':':
+		AddToken(TokenType::COLON);
+		return true;
+	case L';':
+		AddToken(TokenType::SEMI);
+		return true;
+	case L'=':
+		SetLongOperator(TokenType::EQUALS);
+		return true;
+	case L'!':
+		SetLongOperator(TokenType::EXCLAMATION_MARK);
+		return true;
+	case L'<':
+		SetLongOperator(TokenType::LT);
+		return true;
+	case L'>':
+		SetLongOperator(TokenType::GT);
+		return true;
+	case L'@':
+		SetLongOperator(TokenType::AT);
+		return true;
+	case L'|':
+		SetLongOperator(TokenType::VERTICAL);
+		return true;
+	case L'&':
+		SetLongOperator(TokenType::AMPER);
+		return true;
+	case L'^':
+		SetLongOperator(TokenType::CIRCUMFLEX);
+		return true;
+	case L'%':
+		SetLongOperator(TokenType::PERCENT);
+		return true;
+	case L'+':
+		SetLongOperator(TokenType::PLUS);
+		return true;
+	case L'-':
+		SetLongOperator(TokenType::MINUS);
+		return true;
+	case L'*':
+		SetLongOperator(TokenType::STAR);
+		return true;
+	case L'/':
+		SetLongOperator(TokenType::SLASH);
+		return true;
+
+	}
+	return false;
+}
+
+bool Tokenizer::IsNotLiteral(wchar_t c)
+{
+	switch (c)
+	{
+	case L'+': return true;
+	case L'-': return true;
+	case L'*': return true;
+	case L'/': return true;
+	case L'%': return true;
+	case L'^': return true;
+	case L'$': return true;
+	case L'@': return true;
+	case L'<': return true;
+	case L'>': return true;
+	case L'!': return true;
+	case L'=': return true;
+	default:
+		return false;
+	}
+}
+
+bool Tokenizer::CheckSymbolsAfterOperator(wchar_t c)
+{
+	if (!IsNotLiteral(c)) {
+		if (c >= L'1' && c <= L'9') {
+			status.token_type = TokenType::INTEGER;
+			buffer += c;
+		}
+		else if (c == L'0') {
+			status.token_type = TokenType::INTEGER;
+			status.int_type = IntType::SPEC;
+		}
+		else if (c == L'"') {
+			status.token_type = TokenType::TEXT;
+			status.string_type = StringType::DOUBLE;
+		}
+		else if (c == L'\'') {
+			status.token_type = TokenType::TEXT;
+			status.string_type = StringType::SINGLE;
+		}
+		else {
+			status.token_type = TokenType::LITERAL;
+			buffer += c;
+		}
+		return true;
+	}
+	else {
+		return false;
+	}
+}
+
+long long Tokenizer::ConvertWstringToLong(const wchar_t str[], size_t length, IntType type)
+{
+	switch (type)
+	{
+	case IntType::HEX: return ConvertWstringNumToDec(str, length, 16);
+	case IntType::DEC: return ConvertWstringNumToDec(str, length, 10);
+	case IntType::OCT: return ConvertWstringNumToDec(str, length, 8);
+	case IntType::BIN: return ConvertWstringNumToDec(str, length, 2);
+	case IntType::NONE: break;
+	case IntType::SPEC: break;
+	default: break;
+	}
+	return 0;
+}
+
+long long Tokenizer::ConvertWstringNumToDec(const wchar_t str[], size_t length, unsigned int foundation)
+{
+	long long result = 0;
+	size_t min_str_index = 0;
+	bool negative = false;
+	size_t power = length - 1;
+	if (str[0] == L'-') {
+		min_str_index++;
+		negative = true;
+		power--;
+	};
+	for (size_t i = min_str_index; i < length; i++)
+	{
+		result += ConvertWcharToNum(str[i]) * pow(foundation, power);
+		power--;
+	}
+
+	return (negative) ? -result: result;
+}
+
+unsigned int Tokenizer::ConvertWcharToNum(wchar_t c)
+{
+	switch (c)
 	{
 	case L'0': return 0;
 	case L'1': return 1;
@@ -301,18 +379,17 @@ size_t Lexer::get_alphabet_number(wchar_t chr) {
 	case L'8': return 8;
 	case L'9': return 9;
 	case L'a': return 10;
-	case L'A': return 10;
 	case L'b': return 11;
-	case L'B': return 11;
 	case L'c': return 12;
-	case L'C': return 12;
 	case L'd': return 13;
-	case L'D': return 13;
 	case L'e': return 14;
-	case L'E': return 14;
 	case L'f': return 15;
+	case L'A': return 10;
+	case L'B': return 11;
+	case L'C': return 12;
+	case L'D': return 13;
+	case L'E': return 14;
 	case L'F': return 15;
-	default:
-		return 0;
+	default: return 0;
 	}
 }
