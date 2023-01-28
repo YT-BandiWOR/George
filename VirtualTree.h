@@ -22,6 +22,7 @@ public:
 
 	~Token() {
 		if (size >= 0) delete[] data;
+		size = 0;
 	}
 };
 

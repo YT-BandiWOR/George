@@ -19,8 +19,6 @@ Tokenizer::Tokenizer(const wchar_t text[], size_t text_length)
 	buffer = wstring();
 	buffer.reserve(64);
 	tree = nullptr;
-
-	std::cout << "sizeof Tokenizer: " << sizeof(Tokenizer) << std::endl;
 }
 
 VirtualTree* Tokenizer::tokenize()
@@ -32,7 +30,7 @@ VirtualTree* Tokenizer::tokenize()
 	{
 		this->status.c = this->text[i];
 		wchar_t c = this->status.c;
-		if (c == '\n') {
+		if (c == L'\n') {
 			this->status.line += 1;
 			this->status.symbol = 1;
 		}
@@ -106,8 +104,18 @@ VirtualTree* Tokenizer::tokenize()
 			{
 				buffer += c;
 			}
+			else if (c == L'.') {
+				buffer += c;
+				status.token_type = TokenType::FLOAT;
+			}
 			break;
-
+		case TokenType::FLOAT:
+			if (c >= L'0' && c <= L'9')
+				buffer += c;
+			else {
+				// Error
+			}
+			break;
 		case TokenType::PLUS:
 			if (c == L'=') {
 				AddLongOperator(TokenType::PLUSEQ);
@@ -119,6 +127,12 @@ VirtualTree* Tokenizer::tokenize()
 		case TokenType::MINUS:
 			if (c == L'=') {
 				AddLongOperator(TokenType::MINUSEQ);
+			}
+			else if (c >= L'0' && c <= L'9') {
+				status.token_type = TokenType::INTEGER;
+				status.int_type = IntType::DEC;
+				buffer += L'-';
+				buffer += c;
 			}
 			else if (CheckSymbolsAfterOperator(c)) {
 				// Error
@@ -146,6 +160,38 @@ VirtualTree* Tokenizer::tokenize()
 				// Error
 			}
 			break;
+		case TokenType::LT:
+			if (c == L'=') {
+				AddLongOperator(TokenType::LTE);
+			}
+			else if (CheckSymbolsAfterOperator(c)) {
+				// Error
+			}
+			break;
+		case TokenType::GT:
+			if (c == L'=') {
+				AddLongOperator(TokenType::GTE);
+			}
+			else if (CheckSymbolsAfterOperator(c)) {
+				// Error
+			}
+			break;
+		case TokenType::AT:
+			if (c == L'=') {
+				AddLongOperator(TokenType::ATEQ);
+			}
+			else if (CheckSymbolsAfterOperator(c)) {
+				// Error
+			}
+			break;
+		case TokenType::EQUALS:
+			if (c == L'=') {
+				AddLongOperator(TokenType::EQEQUALS);
+			}
+			else if (CheckSymbolsAfterOperator(c)) {
+				// Error
+			}
+			break;
 		}
 	}
 	AppendToken();
@@ -157,22 +203,37 @@ void Tokenizer::AppendToken()
 {
 	if (status.token_type == TokenType::NONE) return;
 	if (buffer.empty()) {
-		tree->push_back(new Token(status.line, status.symbol, status.token_type, nullptr, 0));
-		status.token_type = TokenType::NONE;
+		if (status.token_type == TokenType::LITERAL) return;
+		else if (status.token_type == TokenType::INTEGER) {
+			auto result = new long long[1];
+			*result = 0;
+			tree->push_back(new Token(status.line, status.symbol, status.token_type, (wchar_t*)result, sizeof(long long) / sizeof(wchar_t)));
+		}
+		else {
+			tree->push_back(new Token(status.line, status.symbol, status.token_type, nullptr, 0));
+		}
 	}
 	else {
 		if (status.token_type == TokenType::INTEGER) {
-			long long* result = (long long*) new char[sizeof(long long)];
+			auto result = new long long[1];
 			*result = ConvertWstringToLong(buffer.c_str(), buffer.size(), status.int_type);
-			tree->push_back(new Token(status.line, status.symbol, status.token_type, (wchar_t*)result, sizeof(long long)/sizeof(wchar_t)));
+			tree->push_back(new Token(status.line, status.symbol, status.token_type, (wchar_t*)result, T1_as_T2_ratio(long long, wchar_t)));
+		}
+		else if (status.token_type == TokenType::FLOAT) {
+			auto result = new long double[1];
+			*result = ConvertWstringToFloat(buffer.c_str(), buffer.size());
+			tree->push_back(new Token(status.line, status.symbol, status.token_type, (wchar_t*)result, T1_as_T2_ratio(long double, wchar_t)));
 		}
 		else {
 			tree->push_back(new Token(status.line, status.symbol, status.token_type, buffer.c_str(), buffer.size()));
 		}
-
-		buffer.clear();
-		status.token_type = TokenType::NONE;
 	}
+
+	buffer.clear();
+	status.token_type = TokenType::NONE;
+	status.int_type = IntType::NONE;
+	status.long_operator = LongOperator::FALSE;
+	status.string_backslash = StringBackSlash::FALSE;
 }
 
 void Tokenizer::AddToken(TokenType type)
@@ -202,6 +263,7 @@ bool Tokenizer::SwitchOperators()
 	{
 	case L'\n':
 	case L' ':
+	case L'\t':
 		AppendToken();
 		return true;
 	case L'(':
@@ -223,6 +285,11 @@ bool Tokenizer::SwitchOperators()
 		AddToken(TokenType::RIGHT_CURLY_BRACKET);
 		return true;
 	case L'.':
+		if (status.token_type == TokenType::INTEGER) {
+			status.token_type = TokenType::FLOAT;
+			buffer += L'.';
+			return false;
+		}
 		AddToken(TokenType::DOT);
 		return true;
 	case L',':
@@ -278,7 +345,7 @@ bool Tokenizer::SwitchOperators()
 	return false;
 }
 
-bool Tokenizer::IsNotLiteral(wchar_t c)
+bool Tokenizer::IsOperator(wchar_t c)
 {
 	switch (c)
 	{
@@ -301,7 +368,7 @@ bool Tokenizer::IsNotLiteral(wchar_t c)
 
 bool Tokenizer::CheckSymbolsAfterOperator(wchar_t c)
 {
-	if (!IsNotLiteral(c)) {
+	if (!IsOperator(c)) {
 		if (c >= L'1' && c <= L'9') {
 			status.token_type = TokenType::INTEGER;
 			buffer += c;
@@ -318,7 +385,11 @@ bool Tokenizer::CheckSymbolsAfterOperator(wchar_t c)
 			status.token_type = TokenType::TEXT;
 			status.string_type = StringType::SINGLE;
 		}
+		else if (c == L' ') {
+			AppendToken();
+		}
 		else {
+			AppendToken();
 			status.token_type = TokenType::LITERAL;
 			buffer += c;
 		}
@@ -342,6 +413,41 @@ long long Tokenizer::ConvertWstringToLong(const wchar_t str[], size_t length, In
 	default: break;
 	}
 	return 0;
+}
+
+long double Tokenizer::ConvertWstringToFloat(const wchar_t str[], size_t length)
+{
+	long double result = 0;
+	size_t min_str_index = 0;
+	bool negative = false;
+
+	int power = -1;
+	for (size_t i = 0; str[i] != L'.' && str[i] != L'\0'; ++i) power++;
+	
+	if (str[0] == L'-') {
+		min_str_index++;
+		negative = true;
+	}
+	for (size_t i = 0; i < length; i++)
+	{
+		auto c = str[i];
+		if (c == L'.' || c == L',') {
+			for (size_t j = i + 1; j < length; j++)
+			{
+				c = str[j];
+				long double inc = 0.1;
+				result += ConvertWcharToNum(c) * inc;
+				inc /= 10;
+			}
+			break;
+		}
+		else {
+			result += ConvertWcharToNum(c) * pow(10, power);
+			power--;
+		}
+	}
+
+	return (negative) ? -result : result;
 }
 
 long long Tokenizer::ConvertWstringNumToDec(const wchar_t str[], size_t length, unsigned int foundation)

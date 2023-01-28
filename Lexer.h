@@ -3,6 +3,8 @@
 #include "Types.h"
 #include "VirtualTree.h"
 
+#define T1_as_T2_ratio(T1, T2) (sizeof(T1)/sizeof(T2))
+
 
 class Tokenizer
 {
@@ -18,9 +20,10 @@ private:
 	void SetLongOperator(TokenType type);
 	void AddLongOperator(TokenType type);
 	bool SwitchOperators();
-	bool IsNotLiteral(wchar_t c);
+	bool IsOperator(wchar_t c);
 	bool CheckSymbolsAfterOperator(wchar_t c);
 	long long ConvertWstringToLong(const wchar_t str[], size_t length, IntType type);
+	long double ConvertWstringToFloat(const wchar_t str[], size_t length);
 	long long ConvertWstringNumToDec(const wchar_t str[], size_t length, unsigned int foundation);
 	unsigned int ConvertWcharToNum(wchar_t c);
 

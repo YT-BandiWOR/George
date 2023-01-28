@@ -6,47 +6,37 @@
 
 using namespace std;
 
-std::string ReadFromFile(const char filename[]) {
-	std::ifstream f(filename);
+std::wstring ReadFromFile(const wchar_t filename[]) {
+	std::wifstream f(filename);
 	f.seekg(0, std::ios::end);
 	size_t size = f.tellg();
-	std::string s(size, ' ');
+	std::wstring s(size, ' ');
 	f.seekg(0);
 	f.read(&s[0], size);
 	return s;
 }
 
+int wmain(int argc, const wchar_t* argv[]) {
+	wchar_t* filename;
+	if (argc > 1) filename = (wchar_t*)argv[1];
+	else filename = (wchar_t*)L"Main.gr";
 
-int main(int argc, const char* argv[]) {
-	char* filename;
-
-	if (argc > 1) {
-		filename = (char*)argv[1];
-	}
-	else {
-		filename = (char*)"Main.gr";
-	}
-
-
-	string str = ReadFromFile(filename);
-	std::wstring wstr(str.begin(), str.end());
-	wchar_t* data = new wchar_t[wstr.size() + 1];
-	for (size_t i = 0; i < wstr.size(); i++)
-	{
-		data[i] = wstr[i];
-	}
-	data[wstr.size()] = '\0';
-
-	auto lexer = Tokenizer(data, wstr.size());
+	auto file_text = ReadFromFile(filename);
+	auto lexer = Tokenizer(file_text.c_str(), file_text.size());
 	auto virtual_tree = lexer.tokenize();
-
-	delete[] data;
 
 	for (size_t i = 0; i < virtual_tree->size(); i++)
 	{
 		auto el = virtual_tree->at(i);
 		if (el->type == TokenType::INTEGER) {
-			wcout << operator_to_wtext(el->type) << L" " << (long long)*el->data << endl;
+			auto data = (long long*)el->data;
+
+			wcout << operator_to_wtext(el->type) << L" " << *data << endl;
+		}
+		else if (el->type == TokenType::FLOAT) {
+			auto data = (long double*)el->data;
+
+			wcout << operator_to_wtext(el->type) << L" " << *data << endl;
 		}
 		else {
 			wcout << operator_to_wtext(el->type) << L" " << el->data << endl;
@@ -54,7 +44,6 @@ int main(int argc, const char* argv[]) {
 	}
 
 	delete virtual_tree;
-
 
 	return 0;
 }
